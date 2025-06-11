@@ -17,19 +17,19 @@ const KEEPALIVE_INTERVAL = 15 * 1000;
  * */
 
 export interface PapertrailTransportOptions extends Transport.TransportStreamOptions {
-  host: string;
-  port: number;
-  disableTls?: boolean;
-  hostname?: string;
-  program?: string;
-  facility?: string;
-  levels?: any;
-  flushOnClose?: boolean;
+  host: string
+  port: number
+  disableTls?: boolean
+  hostname?: string
+  program?: string
+  facility?: string
+  levels?: any
+  flushOnClose?: boolean
   // options for connection failure and retry behavior
-  attemptsBeforeDecay?: number;
-  maximumAttempts?: number;
-  connectionDelay?: number;
-  maxDelayBetweenReconnection?: number;
+  attemptsBeforeDecay?: number
+  maximumAttempts?: number
+  connectionDelay?: number
+  maxDelayBetweenReconnection?: number
 }
 
 if (Number(winston.version.split('.')[0]) < 3) {
@@ -240,18 +240,25 @@ export class PapertrailConnection extends EventEmitter {
 
     this.emitSilentError(err);
 
+    // Always increment retry counters on every error
+    this.currentRetries++;
+    this.totalRetries++;
+
+    // Check if we've exceeded maximum attempts - if so, stop trying
+    if (this.totalRetries >= this.options.maximumAttempts!) {
+      this.loggingEnabled = false;
+      this.emitSilentError(new Error('Maximum number of retries exceeded, stopping connection attempts'));
+      this._erroring = false;
+      return;
+    }
+
     setTimeout(() => {
+      // Increase delay if we've reached the decay threshold
       if (
         this.connectionDelay < this.options.maxDelayBetweenReconnection! &&
         this.currentRetries >= this.options.attemptsBeforeDecay!
       ) {
         this.connectionDelay = this.connectionDelay * 2;
-        this.currentRetries++;
-      }
-
-      if (this.loggingEnabled && this.totalRetries >= this.options.maximumAttempts!) {
-        this.loggingEnabled = false;
-        this.emitSilentError(new Error('Maximum number of retries exceeded, disabling buffering'));
       }
 
       this._erroring = false;
